@@ -38,6 +38,7 @@ import rospy
 
 from sensor_msgs.msg import NavSatFix, NavSatStatus, TimeReference
 from geometry_msgs.msg import TwistStamped
+from nmea_msgs.msg import Sentence
 
 from libnmea_navsat_driver.checksum_utils import check_nmea_checksum
 import libnmea_navsat_driver.parser
@@ -74,6 +75,11 @@ class RosNMEADriver(object):
 
         self.time_ref_source = rospy.get_param('~time_ref_source', None)
         self.use_RMC = rospy.get_param('~useRMC', False)
+        self.show_nmea_sentence = rospy.get_param('~show_nmea_sentence', False)
+        self.show_parsed_sentence = rospy.get_param('~show_parsed_sentence', False)
+        self.publish_nmea = rospy.get_param('~publish_nmea', False)
+        self.nmea_topic = rospy.get_param('~nmea_topic', 'nmea')
+        self.nmea_pub = rospy.Publisher(self.nmea_topic, Sentence, queue_size=1)
         self.valid_fix = False
 
     def add_sentence(self, nmea_string, frame_id, timestamp=None):
@@ -101,6 +107,10 @@ class RosNMEADriver(object):
                 nmea_string)
             return False
 
+        if self.show_nmea_sentence is True:
+            rospy.loginfo('NMEA: %s', nmea_string)
+        if self.show_parsed_sentence is True:
+            rospy.loginfo('Parsed: %s', parsed_sentence)
         if timestamp:
             current_time = timestamp
         else:
@@ -116,6 +126,13 @@ class RosNMEADriver(object):
                 current_time_ref.source = self.time_ref_source
             else:
                 current_time_ref.source = frame_id
+
+        if self.publish_nmea is True:
+            current_nmea = Sentence()
+            current_nmea.header.stamp = current_time
+            current_nmea.header.frame_id = frame_id
+            current_nmea.sentence = nmea_string#.partition("$")[2]
+            self.nmea_pub.publish(current_nmea)
 
         if not self.use_RMC and 'GGA' in parsed_sentence:
             data = parsed_sentence['GGA']
